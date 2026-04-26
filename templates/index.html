@@ -6,7 +6,17 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+
   <h1>Real‑Time Analytics Dashboard</h1>
+
+  <!-- Upload CSV -->
+  <div class="card">
+    <form method="post" enctype="multipart/form-data">
+      <label>Upload your CSV (marketing_spend, user_signups):</label>
+      <input type="file" name="file" accept=".csv" required>
+      <button type="submit">Use this CSV</button>
+    </form>
+  </div>
 
   <div class="card">
     <p>Marketing Spend ↔ User Signups correlation: <strong>{{ correlation }}</strong></p>
@@ -61,9 +71,7 @@
         });
     }
 
-    // Load once
     updateChart();
-    // Auto refresh every 5 sec
     setInterval(updateChart, 5000);
   </script>
 </body>
