@@ -3,10 +3,7 @@
 <head>
   <title>Real‑Time Analytics Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { font-family: sans-serif; padding: 20px; }
-    .card { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <h1>Real‑Time Analytics Dashboard</h1>
@@ -16,8 +13,8 @@
     <p>Records: {{ n }}</p>
   </div>
 
-  <div class="card">
-    <canvas id="scatterChart" height="100"></canvas>
+  <div class="card chart-container">
+    <canvas id="scatterChart"></canvas>
   </div>
 
   <script>
@@ -66,7 +63,7 @@
 
     // Load once
     updateChart();
-    // Auto refresh every 5 sec (good for “live” feel)
+    // Auto refresh every 5 sec
     setInterval(updateChart, 5000);
   </script>
 </body>

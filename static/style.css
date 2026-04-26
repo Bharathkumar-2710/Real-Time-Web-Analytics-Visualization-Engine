@@ -1,0 +1,65 @@
+/* static/style.css */
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f6f9;
+  margin: 0;
+  padding: 20px;
+  color: #333;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 15px;
+}
+
+h1 {
+  color: #2c3e50;
+  margin-bottom: 5px;
+}
+
+h2 {
+  color: #34495e;
+  font-size: 1.3rem;
+}
+
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.card p {
+  margin: 5px 0;
+}
+
+/* Chart container */
+.chart-container {
+  height: 400px;
+  margin-top: 10px;
+}
+
+/* Upload form */
+form {
+  margin-bottom: 15px;
+}
+
+form input[type="file"] {
+  margin-right: 10px;
+}
+
+form button {
+  padding: 8px 15px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+form button:hover {
+  background-color: #2980b9;
+}
