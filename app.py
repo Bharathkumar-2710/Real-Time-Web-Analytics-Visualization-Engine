@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 from sqlalchemy import create_engine, Column, Integer, Float, DateTime
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
 import numpy as np
@@ -159,19 +159,75 @@ def api_data():
 
 @app.route("/chart")
 def bivariate_chart():
-    df = fetch_data()
-    if df.empty or len(df) < 2:
-        fig = px.scatter(x=[], y=[], title="No chart data available")
-    else:
-        fig = px.scatter(
-            df,
-            x="marketing_spend",
-            y="user_signups",
-            title="Marketing Spend vs User Signups",
-        )
+    df = fetch_data()  # should return your DataFrame with columns
+
+    # ⬇️ PICK ONE CHART TYPE BELOW (uncomment) and keep it
+    # Comment out the others
+
+    # 1. SCATTER plot with regression line (current)
+    fig = px.scatter(
+        df,
+        x="marketing_spend",
+        y="user_signups",
+        trendline="ols",
+        title="Marketing Spend vs User Signups (Scatter)"
+    )
+
+    # 2. LINE chart (trend line)
+    # fig = px.line(
+    #     df,
+    #     x="marketing_spend",
+    #     y="user_signups",
+    #     title="Marketing Spend vs User Signups (Line)"
+    # )
+
+    # 3. BAR chart (bars for each point)
+    # fig = px.bar(
+    #     df,
+    #     x="marketing_spend",
+    #     y="user_signups",
+    #     title="Marketing Spend vs User Signups (Bars)"
+    # )
+
+    # 4. BUBBLE chart (3rd variable controls size)
+    # fig = px.scatter(
+    #     df,
+    #     x="marketing_spend",
+    #     y="user_signups",
+    #     size="price",          # or any 3rd numeric column
+    #     size_max=30,
+    #     title="Marketing Spend vs User Signups (Bubbles)"
+    # )
+
+    # 5. HISTOGRAM of user signups (distribution)
+    # fig = px.histogram(
+    #     df,
+    #     x="user_signups",
+    #     title="Distribution of User Signups"
+    # )
+
+    # 6. BOX plot of user signups
+    # fig = px.box(
+    #     df,
+    #     y="user_signups",
+    #     title="Spread of User Signups"
+    # )
+
+    # 7. PIE / SUNBURST (if you have a category, e.g. "campaign_type")
+    # fig = px.pie(
+    #     df,
+    #     names="campaign_type",     # replace with your category column
+    #     values="marketing_spend",
+    #     title="Marketing Spend by Campaign"
+    # )
+    # fig = px.sunburst(
+    #     df,
+    #     path=["campaign_type"],    # again, example column
+    #     values="marketing_spend",
+    #     title="Sunburst: Marketing Spend by Campaign"
+    # )
     chart_json = json.dumps(fig, cls=PlotlyJSONEncoder)
     return render_template("chart.html", chart_json=chart_json)
-
 
 if __name__ == "__main__":
     init_db()
