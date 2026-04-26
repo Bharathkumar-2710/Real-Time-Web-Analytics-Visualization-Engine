@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+  <title>Bivariate Chart</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <h2>Marketing Spend vs User Signups</h2>
+  <div id="plot"></div>
+
+  <script>
+    const fig = {{ chart_json | safe }};
+    Plotly.newPlot("plot", fig.data, fig.layout);
+  </script>
+</body>
+</html>

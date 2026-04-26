@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+  <title>Real‑Time Analytics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .card { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Real‑Time Analytics Dashboard</h1>
+
+  <div class="card">
+    <p>Marketing Spend ↔ User Signups correlation: <strong>{{ correlation }}</strong></p>
+    <p>Records: {{ n }}</p>
+  </div>
+
+  <div class="card">
+    <canvas id="scatterChart" height="100"></canvas>
+  </div>
+
+  <script>
+    const ctx = document.getElementById("scatterChart").getContext("2d");
+    let scatterChart;
+
+    function updateChart() {
+      fetch("/api/data")
+        .then(response => response.json())
+        .then(data => {
+          const spends = data.map(d => d.marketing_spend);
+          const signups = data.map(d => d.user_signups);
+
+          const datasets = [{
+            label: "User Signups vs Marketing Spend",
+            data: spends.map((spend, i) => ({
+              x: spend,
+              y: signups[i]
+            })),
+            backgroundColor: "rgba(54, 162, 235, 0.5)",
+            borderColor: "rgba(54, 162, 235, 1)",
+            showLine: false,
+            pointRadius: 5
+          }];
+
+          if (!scatterChart) {
+            scatterChart = new Chart(ctx, {
+              type: "scatter",
+              data: { datasets },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  x: { title: { display: true, text: "Marketing Spend" } },
+                  y: { title: { display: true, text: "User Signups" } }
+                },
+                plugins: { legend: { display: false } }
+              }
+            });
+          } else {
+            scatterChart.data.datasets[0].data = datasets[0].data;
+            scatterChart.update();
+          }
+        });
+    }
+
+    // Load once
+    updateChart();
+    // Auto refresh every 5 sec (good for “live” feel)
+    setInterval(updateChart, 5000);
+  </script>
+</body>
+</html>
