@@ -19,6 +19,15 @@
   </div>
 
   <div class="card">
+    <label for="chartType">Change Chart Type:</label>
+    <select id="chartType" onchange="updateChart()">
+      <option value="scatter">Scatter Plot</option>
+      <option value="line">Line Chart</option>
+      <option value="bar">Bar Chart</option>
+    </select>
+  </div>
+
+  <div class="card">
     <p>Marketing Spend ↔ User Signups correlation: <strong>{{ correlation }}</strong></p>
     <p>Records: {{ n }}</p>
   </div>
@@ -32,6 +41,10 @@
     let scatterChart;
 
     function updateChart() {
+      // Safely get the type, default to "scatter" if dropdown is missing
+      const typeElement = document.getElementById("chartType");
+      const type = typeElement ? typeElement.value : "scatter";
+      
       fetch("/api/data")
         .then(response => response.json())
         .then(data => {
@@ -40,38 +53,44 @@
 
           const datasets = [{
             label: "User Signups vs Marketing Spend",
-            data: spends.map((spend, i) => ({
-              x: spend,
-              y: signups[i]
-            })),
+            data: type === "bar" ? signups : spends.map((spend, i) => ({ x: spend, y: signups[i] })),
             backgroundColor: "rgba(54, 162, 235, 0.5)",
             borderColor: "rgba(54, 162, 235, 1)",
-            showLine: false,
-            pointRadius: 5
+            showLine: type === "line",
+            pointRadius: (type === "scatter" || type === "line") ? 5 : 0
           }];
 
-          if (!scatterChart) {
-            scatterChart = new Chart(ctx, {
-              type: "scatter",
-              data: { datasets },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  x: { title: { display: true, text: "Marketing Spend" } },
-                  y: { title: { display: true, text: "User Signups" } }
-                },
-                plugins: { legend: { display: false } }
-              }
-            });
-          } else {
-            scatterChart.data.datasets[0].data = datasets[0].data;
-            scatterChart.update();
+          if (scatterChart) {
+            scatterChart.destroy();
           }
+
+          scatterChart = new Chart(ctx, {
+            type: type,
+            data: { 
+              labels: type === "bar" ? spends : undefined,
+              datasets 
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { 
+                  title: { display: true, text: "Marketing Spend" },
+                  ticks: { maxRotation: 45, minRotation: 45 } 
+                },
+                y: { 
+                  title: { display: true, text: "User Signups" } 
+                }
+              },
+              plugins: { legend: { display: false } }
+            }
+          });
         });
     }
 
+    // Initial load
     updateChart();
+    // Auto-refresh every 5 seconds
     setInterval(updateChart, 5000);
   </script>
 </body>
