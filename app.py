@@ -1,10 +1,13 @@
-from flask import Flask, render_template, jsonify
+﻿from flask import Flask, render_template, jsonify
 from sqlalchemy import create_engine, Column, Integer, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import plotly.express as px
+from plotly.utils import PlotlyJSONEncoder
+import json
 
 app = Flask(__name__)
 
@@ -44,38 +47,55 @@ def store_data():
     """Save a cleaned dataset to DB once."""
     data = load_data()
     session = Session()
-    # clear old records (optional)
-    session.query(Record).delete()
-    # bulk insert
-    for _, row in data.iterrows():
-        rec = Record(
-            price=row["price"],
-            marketing_spend=row["marketing_spend"],
-            user_signups=row["user_signups"],
-        )
-        session.add(rec)
-    session.commit()
+    try:
+        session.query(Record).delete()
+        for _, row in data.iterrows():
+            rec = Record(
+                price=row["price"],
+                marketing_spend=row["marketing_spend"],
+                user_signups=row["user_signups"],
+            )
+            session.add(rec)
+        session.commit()
+    finally:
+        session.close()
 
 
 def fetch_data():
     session = Session()
-    rows = session.query(
-        Record.timestamp,
-        Record.price,
-        Record.marketing_spend,
-        Record.user_signups,
-    ).all()
-    df = pd.DataFrame(rows, columns=["timestamp", "price", "marketing_spend", "user_signups"])
-    return df
+    try:
+        rows = session.query(
+            Record.timestamp,
+            Record.price,
+            Record.marketing_spend,
+            Record.user_signups,
+        ).all()
+        df = pd.DataFrame(rows, columns=["timestamp", "price", "marketing_spend", "user_signups"])
+        return df
+    finally:
+        session.close()
+
+
+def init_db():
+    Base.metadata.create_all(engine)
+    session = Session()
+    try:
+        if session.query(Record).count() == 0:
+            store_data()
+    finally:
+        session.close()
 
 
 @app.route("/")
 def index():
     df = fetch_data()
-    corr_sp = df["marketing_spend"].corr(df["user_signups"])  # correlation
+    if len(df) < 2:
+        corr_sp = 0.0
+    else:
+        corr_sp = df["marketing_spend"].corr(df["user_signups"])
     return render_template(
         "index.html",
-        correlation=round(corr_sp, 3),
+        correlation=round(corr_sp or 0.0, 3),
         n=len(df),
     )
 
@@ -84,23 +104,22 @@ def index():
 def api_data():
     df = fetch_data()
     return jsonify(df.to_dict(orient="records"))
-import plotly.express as px
-from plotly.utils import PlotlyJSONEncoder
-import json
+
 
 @app.route("/chart")
 def bivariate_chart():
     df = fetch_data()
-
-    # Scatter + regression line (Plotly)
     fig = px.scatter(
         df,
         x="marketing_spend",
         y="user_signups",
-        trendline="ols",  # adds regression line
+        trendline="ols",
         title="Marketing Spend vs User Signups"
     )
-
-    # Convert to JSON for frontend
     chart_json = json.dumps(fig, cls=PlotlyJSONEncoder)
     return render_template("chart.html", chart_json=chart_json)
+
+
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True)
