@@ -1,16 +1,81 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <title>Bivariate Chart</title>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plotly Analytics Explorer - Real-Time Web Analytics Engine</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h2>Marketing Spend vs User Signups</h2>
-  <div id="plot"></div>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">RT</div>
+        <div>
+          <h1>Plotly Analytics Explorer</h1>
+          <p class="brand-subtitle">Interactive Bivariate Regression, Distributions &amp; Time-Series Views</p>
+        </div>
+      </div>
+
+      <nav class="nav-actions">
+        <a href="{{ url_for('index') }}" class="nav-link">Overview Dashboard</a>
+        <a href="{{ url_for('bivariate_chart', type=chart_type) }}" class="nav-link active">Plotly Deep Dive</a>
+      </nav>
+    </header>
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Visualization Mode</h2>
+          <p class="card-subtitle">Select an interactive Plotly chart generated directly from SQLite records.</p>
+        </div>
+        <div class="btn-row">
+          <a href="{{ url_for('bivariate_chart', type='scatter') }}" class="btn btn-secondary {% if chart_type == 'scatter' %}active{% endif %}">Scatter + OLS</a>
+          <a href="{{ url_for('bivariate_chart', type='line') }}" class="btn btn-secondary {% if chart_type == 'line' %}active{% endif %}">Time-Series Line</a>
+          <a href="{{ url_for('bivariate_chart', type='bar') }}" class="btn btn-secondary {% if chart_type == 'bar' %}active{% endif %}">Signups Bar</a>
+          <a href="{{ url_for('bivariate_chart', type='histogram') }}" class="btn btn-secondary {% if chart_type == 'histogram' %}active{% endif %}">Histogram</a>
+          <a href="{{ url_for('bivariate_chart', type='box') }}" class="btn btn-secondary {% if chart_type == 'box' %}active{% endif %}">Box Spread</a>
+        </div>
+      </div>
+
+      <div id="plot" class="plotly-container"></div>
+    </section>
+
+    <section class="kpi-grid" aria-label="Regression Statistics">
+      <article class="kpi-card">
+        <div class="kpi-label">Pearson Correlation (r)</div>
+        <div class="kpi-value">{{ analytics.correlation_display }}</div>
+        <div class="kpi-meta">{{ analytics.correlation_strength }}</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-label">Coefficient of Determination (R²)</div>
+        <div class="kpi-value">{% if analytics.r_squared is not none %}{{ "{:.4f}".format(analytics.r_squared) }}{% else %}N/A{% endif %}</div>
+        <div class="kpi-meta">Explained signup variance</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-label">OLS Slope</div>
+        <div class="kpi-value">{% if analytics.slope is not none %}{{ "{:.5f}".format(analytics.slope) }}{% else %}N/A{% endif %}</div>
+        <div class="kpi-meta">Signups gained per $1 spend</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-label">p-value</div>
+        <div class="kpi-value">{% if analytics.p_value is not none %}{{ "{:.6f}".format(analytics.p_value) }}{% else %}N/A{% endif %}</div>
+        <div class="kpi-meta">Sample size: {{ analytics.record_count }} records</div>
+      </article>
+    </section>
+
+    <footer class="footer">
+      Real-Time Web Analytics Visualization Engine &bull; Interactive Plotly Deep Dive
+    </footer>
+  </div>
 
   <script>
     const fig = {{ chart_json | safe }};
-    Plotly.newPlot("plot", fig.data, fig.layout);
+    Plotly.newPlot("plot", fig.data, fig.layout, {
+      responsive: true,
+      displaylogo: false
+    });
   </script>
 </body>
 </html>

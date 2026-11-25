@@ -1,97 +1,460 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <title>Real‑Time Analytics Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Real-Time Web Analytics Visualization Engine</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">RT</div>
+        <div>
+          <h1>Real-Time Web Analytics Engine</h1>
+          <p class="brand-subtitle">Marketing Spend vs. User Acquisition Telemetry &amp; OLS Correlation</p>
+        </div>
+      </div>
 
-  <h1>Real‑Time Analytics Dashboard</h1>
+      <nav class="nav-actions">
+        <span id="liveStatusPill" class="status-pill">
+          <span class="status-dot"></span>
+          <span id="liveStatusText">Stream Paused</span>
+        </span>
+        <a href="{{ url_for('index') }}" class="nav-link active">Overview Dashboard</a>
+        <a href="{{ url_for('bivariate_chart') }}" class="nav-link">Plotly Deep Dive</a>
+      </nav>
+    </header>
 
-  <!-- Upload CSV -->
-  <div class="card">
-    <form method="post" enctype="multipart/form-data">
-      <label>Upload your CSV (marketing_spend, user_signups):</label>
-      <input type="file" name="file" accept=".csv" required>
-      <button type="submit">Use this CSV</button>
-    </form>
-  </div>
+    {% if error %}
+    <div class="alert alert-error" role="alert">
+      <span>{{ error }}</span>
+    </div>
+    {% endif %}
 
-  <div class="card">
-    <label for="chartType">Change Chart Type:</label>
-    <select id="chartType" onchange="updateChart()">
-      <option value="scatter">Scatter Plot</option>
-      <option value="line">Line Chart</option>
-      <option value="bar">Bar Chart</option>
-    </select>
-  </div>
+    {% if success %}
+    <div class="alert alert-success" role="status">
+      <span>{{ success }}</span>
+    </div>
+    {% endif %}
 
-  <div class="card">
-    <p>Marketing Spend ↔ User Signups correlation: <strong>{{ correlation }}</strong></p>
-    <p>Records: {{ n }}</p>
-  </div>
+    <div id="dynamicAlert" class="alert alert-success alert-hidden" role="status">
+      <span id="dynamicAlertText"></span>
+    </div>
 
-  <div class="card chart-container">
-    <canvas id="scatterChart"></canvas>
+    <!-- KPI Summary Cards -->
+    <section class="kpi-grid" aria-label="Key Performance Indicators">
+      <article class="kpi-card">
+        <div class="kpi-label">Total Marketing Spend</div>
+        <div class="kpi-value" id="kpiTotalSpend">${{ "{:,.2f}".format(analytics.total_spend) }}</div>
+        <div class="kpi-meta" id="kpiAvgSpend">Avg ${{ "{:,.2f}".format(analytics.avg_spend) }} / period</div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-label">Total User Signups</div>
+        <div class="kpi-value" id="kpiTotalSignups">{{ "{:,.0f}".format(analytics.total_signups) }}</div>
+        <div class="kpi-meta" id="kpiAvgSignups">Avg {{ "{:,.1f}".format(analytics.avg_signups) }} / period</div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-label">Avg Cost / Signup (CAC)</div>
+        <div class="kpi-value" id="kpiCac">
+          {% if analytics.cost_per_signup is not none %}${{ "{:,.2f}".format(analytics.cost_per_signup) }}{% else %}N/A{% endif %}
+        </div>
+        <div class="kpi-meta">Acquisition efficiency ratio</div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-label">Pearson Correlation (r)</div>
+        <div class="kpi-value" id="kpiCorrelation">{{ analytics.correlation_display }}</div>
+        <div class="kpi-meta">
+          <span class="badge" id="kpiStrength">{{ analytics.correlation_strength }}</span>
+        </div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-label">Model Fit (R²) &amp; Sample</div>
+        <div class="kpi-value" id="kpiRSquared">
+          {% if analytics.r_squared is not none %}{{ "{:.3f}".format(analytics.r_squared) }}{% else %}N/A{% endif %}
+        </div>
+        <div class="kpi-meta"><span id="kpiRecords">{{ analytics.record_count }}</span> tracked observations</div>
+      </article>
+    </section>
+
+    <!-- Ingestion & Stream Controls -->
+    <section class="controls-grid">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Dataset Ingestion &amp; Export</h2>
+            <p class="card-subtitle">Upload CSV files with <code>marketing_spend</code> and <code>user_signups</code> columns.</p>
+          </div>
+        </div>
+        <form class="upload-form" method="post" enctype="multipart/form-data">
+          <input class="file-input" type="file" name="file" accept=".csv" required>
+          <button class="btn btn-primary" type="submit">Upload &amp; Analyze</button>
+        </form>
+        <div class="btn-row">
+          <a class="btn btn-secondary" href="{{ url_for('api_sample_csv') }}">Download Sample CSV</a>
+          <a class="btn btn-secondary" href="{{ url_for('api_export') }}">Export Current CSV</a>
+          <button class="btn btn-secondary" type="button" onclick="resetDataset()">Reset Baseline</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Visualization &amp; Live Stream Controls</h2>
+            <p class="card-subtitle">Switch chart modes or stream live simulated conversion events.</p>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-bottom: 14px;">
+          <label for="chartType" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Chart Mode:</label>
+          <select id="chartType" class="select-control" onchange="renderDashboard()">
+            <option value="scatter">Scatter Plot + OLS Trendline</option>
+            <option value="line">Chronological Line Trend</option>
+            <option value="bar">Signups Bar Chart (Chronological)</option>
+          </select>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-emerald" type="button" onclick="simulateLiveEvent()">+ Simulate Live Event</button>
+          <label class="toggle-label">
+            <input type="checkbox" id="liveStreamToggle" onchange="toggleLiveStream()">
+            Auto-Stream (5s)
+          </label>
+          <button class="btn btn-secondary" type="button" onclick="fetchAndRender()">Refresh Now</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Primary Chart -->
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title" id="chartHeading">Marketing Spend vs. User Signups (Scatter &amp; OLS Fit)</h2>
+          <p class="card-subtitle" id="chartSubheading">Interactive visualization updated from live SQLite telemetry.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('bivariate_chart') }}">Open Plotly Explorer &rarr;</a>
+      </div>
+      <div class="chart-container">
+        <canvas id="analyticsChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Recent Telemetry Table -->
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Latest Telemetry Observations</h2>
+          <p class="card-subtitle">Most recent 10 records stored in the analytics database.</p>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp (UTC)</th>
+              <th>Marketing Spend</th>
+              <th>User Signups</th>
+              <th>Cost / Signup</th>
+            </tr>
+          </thead>
+          <tbody id="recentTableBody">
+            {% for row in recent_records %}
+            <tr>
+              <td>{{ row.timestamp }}</td>
+              <td>${{ "{:,.2f}".format(row.marketing_spend) }}</td>
+              <td>{{ "{:,.0f}".format(row.user_signups) }}</td>
+              <td>
+                {% if row.user_signups > 0 %}
+                  ${{ "{:,.2f}".format(row.marketing_spend / row.user_signups) }}
+                {% else %}
+                  N/A
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="footer">
+      Real-Time Web Analytics Visualization Engine &bull; Flask, SQLAlchemy, SciPy &amp; Chart.js / Plotly
+    </footer>
   </div>
 
   <script>
-    const ctx = document.getElementById("scatterChart").getContext("2d");
-    let scatterChart;
+    const ctx = document.getElementById("analyticsChart").getContext("2d");
+    let analyticsChart = null;
+    let latestPayload = null;
+    let streamIntervalId = null;
 
-    function updateChart() {
-      // Safely get the type, default to "scatter" if dropdown is missing
-      const typeElement = document.getElementById("chartType");
-      const type = typeElement ? typeElement.value : "scatter";
-      
-      fetch("/api/data")
-        .then(response => response.json())
-        .then(data => {
-          const spends = data.map(d => d.marketing_spend);
-          const signups = data.map(d => d.user_signups);
-
-          const datasets = [{
-            label: "User Signups vs Marketing Spend",
-            data: type === "bar" ? signups : spends.map((spend, i) => ({ x: spend, y: signups[i] })),
-            backgroundColor: "rgba(54, 162, 235, 0.5)",
-            borderColor: "rgba(54, 162, 235, 1)",
-            showLine: type === "line",
-            pointRadius: (type === "scatter" || type === "line") ? 5 : 0
-          }];
-
-          if (scatterChart) {
-            scatterChart.destroy();
-          }
-
-          scatterChart = new Chart(ctx, {
-            type: type,
-            data: { 
-              labels: type === "bar" ? spends : undefined,
-              datasets 
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: { 
-                  title: { display: true, text: "Marketing Spend" },
-                  ticks: { maxRotation: 45, minRotation: 45 } 
-                },
-                y: { 
-                  title: { display: true, text: "User Signups" } 
-                }
-              },
-              plugins: { legend: { display: false } }
-            }
-          });
-        });
+    function showToast(message, isError = false) {
+      const box = document.getElementById("dynamicAlert");
+      const text = document.getElementById("dynamicAlertText");
+      box.classList.remove("alert-hidden", "alert-error", "alert-success");
+      box.classList.add(isError ? "alert-error" : "alert-success");
+      text.textContent = message;
     }
 
-    // Initial load
-    updateChart();
-    // Auto-refresh every 10 minutes
-    setInterval(updateChart, 600000);
+    function formatCurrency(val) {
+      return "$" + Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function updateKpis(analytics) {
+      document.getElementById("kpiTotalSpend").textContent = formatCurrency(analytics.total_spend);
+      document.getElementById("kpiAvgSpend").textContent = `Avg ${formatCurrency(analytics.avg_spend)} / period`;
+      document.getElementById("kpiTotalSignups").textContent = Number(analytics.total_signups).toLocaleString(undefined, { maximumFractionDigits: 0 });
+      document.getElementById("kpiAvgSignups").textContent = `Avg ${Number(analytics.avg_signups).toLocaleString(undefined, { maximumFractionDigits: 1 })} / period`;
+      document.getElementById("kpiCac").textContent = analytics.cost_per_signup !== null ? formatCurrency(analytics.cost_per_signup) : "N/A";
+      document.getElementById("kpiCorrelation").textContent = analytics.correlation_display;
+      document.getElementById("kpiStrength").textContent = analytics.correlation_strength;
+      document.getElementById("kpiRSquared").textContent = analytics.r_squared !== null ? Number(analytics.r_squared).toFixed(3) : "N/A";
+      document.getElementById("kpiRecords").textContent = analytics.record_count;
+    }
+
+    function updateTable(records) {
+      const tbody = document.getElementById("recentTableBody");
+      const latest = [...records].slice(-10).reverse();
+      tbody.innerHTML = latest.map(row => {
+        const cac = row.user_signups > 0 ? formatCurrency(row.marketing_spend / row.user_signups) : "N/A";
+        return `
+          <tr>
+            <td>${row.timestamp}</td>
+            <td>${formatCurrency(row.marketing_spend)}</td>
+            <td>${Number(row.user_signups).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+            <td>${cac}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderDashboard() {
+      if (!latestPayload) return;
+      const { records, analytics } = latestPayload;
+      const chartType = document.getElementById("chartType").value;
+      const heading = document.getElementById("chartHeading");
+
+      updateKpis(analytics);
+      updateTable(records);
+
+      if (analyticsChart) {
+        analyticsChart.destroy();
+      }
+
+      if (chartType === "scatter") {
+        heading.textContent = "Marketing Spend vs. User Signups (Scatter & OLS Fit)";
+        const points = records.map(r => ({
+          x: r.marketing_spend,
+          y: r.user_signups,
+          ts: r.timestamp
+        }));
+
+        const datasets = [
+          {
+            label: "Observed Campaigns",
+            data: points,
+            backgroundColor: "rgba(56, 189, 248, 0.72)",
+            borderColor: "#38bdf8",
+            pointRadius: 5,
+            pointHoverRadius: 7
+          }
+        ];
+
+        if (analytics.trendline && analytics.trendline.length === 2) {
+          datasets.push({
+            label: `OLS Trendline (R² = ${analytics.r_squared})`,
+            type: "line",
+            data: analytics.trendline,
+            borderColor: "#f59e0b",
+            backgroundColor: "#f59e0b",
+            borderWidth: 2.5,
+            pointRadius: 0,
+            fill: false,
+            tension: 0
+          });
+        }
+
+        analyticsChart = new Chart(ctx, {
+          type: "scatter",
+          data: { datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                title: { display: true, text: "Marketing Spend ($)", color: "#cbd5e1" },
+                ticks: {
+                  color: "#94a3b8",
+                  callback: value => "$" + Number(value).toLocaleString()
+                },
+                grid: { color: "rgba(148, 163, 184, 0.12)" }
+              },
+              y: {
+                title: { display: true, text: "User Signups", color: "#cbd5e1" },
+                ticks: { color: "#94a3b8" },
+                grid: { color: "rgba(148, 163, 184, 0.12)" }
+              }
+            },
+            plugins: {
+              legend: { labels: { color: "#e2e8f0" } },
+              tooltip: {
+                callbacks: {
+                  label: context => {
+                    const raw = context.raw;
+                    if (raw.ts) {
+                      return `${raw.ts} | Spend: ${formatCurrency(raw.x)} | Signups: ${raw.y}`;
+                    }
+                    return `OLS Fit: (${formatCurrency(raw.x)}, ${raw.y})`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      } else {
+        const labels = records.map(r => r.timestamp.slice(0, 16));
+        const signups = records.map(r => r.user_signups);
+        const spends = records.map(r => r.marketing_spend);
+
+        heading.textContent = chartType === "line"
+          ? "Chronological Marketing Spend & User Signups Trend"
+          : "User Signups by Observation Period";
+
+        const datasets = chartType === "line"
+          ? [
+              {
+                label: "User Signups",
+                data: signups,
+                borderColor: "#10b981",
+                backgroundColor: "rgba(16, 185, 129, 0.15)",
+                yAxisID: "y",
+                tension: 0.25,
+                fill: true,
+                pointRadius: 3
+              },
+              {
+                label: "Marketing Spend ($)",
+                data: spends,
+                borderColor: "#38bdf8",
+                backgroundColor: "rgba(56, 189, 248, 0.1)",
+                yAxisID: "y1",
+                tension: 0.25,
+                pointRadius: 3
+              }
+            ]
+          : [
+              {
+                label: "User Signups",
+                data: signups,
+                backgroundColor: "rgba(56, 189, 248, 0.72)",
+                borderColor: "#38bdf8",
+                borderWidth: 1,
+                borderRadius: 4
+              }
+            ];
+
+        const scales = {
+          x: {
+            ticks: { color: "#94a3b8", maxRotation: 40, autoSkip: true, maxTicksLimit: 12 },
+            grid: { color: "rgba(148, 163, 184, 0.1)" }
+          },
+          y: {
+            position: "left",
+            title: { display: true, text: "User Signups", color: "#cbd5e1" },
+            ticks: { color: "#94a3b8" },
+            grid: { color: "rgba(148, 163, 184, 0.12)" }
+          }
+        };
+
+        if (chartType === "line") {
+          scales.y1 = {
+            position: "right",
+            title: { display: true, text: "Marketing Spend ($)", color: "#38bdf8" },
+            ticks: {
+              color: "#38bdf8",
+              callback: value => "$" + Number(value).toLocaleString()
+            },
+            grid: { drawOnChartArea: false }
+          };
+        }
+
+        analyticsChart = new Chart(ctx, {
+          type: chartType,
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            scales,
+            plugins: {
+              legend: { labels: { color: "#e2e8f0" } }
+            }
+          }
+        });
+      }
+    }
+
+    async function fetchAndRender() {
+      try {
+        const res = await fetch("/api/analytics");
+        if (!res.ok) throw new Error("Failed to load analytics payload.");
+        latestPayload = await res.json();
+        renderDashboard();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    async function simulateLiveEvent() {
+      try {
+        const res = await fetch("/api/simulate", { method: "POST" });
+        if (!res.ok) throw new Error("Failed to simulate live event.");
+        const payload = await res.json();
+        await fetchAndRender();
+        showToast(`Ingested live event: Spend ${formatCurrency(payload.record.marketing_spend)} -> ${payload.record.user_signups} signups.`);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    async function resetDataset() {
+      try {
+        const res = await fetch("/api/reset", { method: "POST" });
+        if (!res.ok) throw new Error("Failed to reset dataset.");
+        const payload = await res.json();
+        await fetchAndRender();
+        showToast(payload.message);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    function toggleLiveStream() {
+      const enabled = document.getElementById("liveStreamToggle").checked;
+      const pill = document.getElementById("liveStatusPill");
+      const statusText = document.getElementById("liveStatusText");
+
+      if (streamIntervalId) {
+        clearInterval(streamIntervalId);
+        streamIntervalId = null;
+      }
+
+      if (enabled) {
+        pill.classList.add("live");
+        statusText.textContent = "Live Stream Active";
+        simulateLiveEvent();
+        streamIntervalId = setInterval(simulateLiveEvent, 5000);
+      } else {
+        pill.classList.remove("live");
+        statusText.textContent = "Stream Paused";
+      }
+    }
+
+    fetchAndRender();
   </script>
 </body>
 </html>
